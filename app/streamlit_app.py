@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from datetime import date
 from pathlib import Path
@@ -236,6 +237,41 @@ def show_page_guide(page: str) -> None:
         cols[3].markdown(f"**Next steps**\n\n{guidance['next']}")
 
 
+def paginate_rows(df: pd.DataFrame, key: str, default_page_size: int = 50) -> pd.DataFrame:
+    if df.empty:
+        return df
+    page_size_options: list[int | str] = [25, 50, 100, 250, "All"]
+    default_index = page_size_options.index(default_page_size) if default_page_size in page_size_options else 1
+    controls = st.columns([1, 1, 4])
+    with controls[0]:
+        page_size = st.selectbox("Rows per page", page_size_options, index=default_index, key=f"{key}_page_size")
+    if page_size == "All":
+        st.caption(f"Showing all {len(df):,} rows after current filters.")
+        return df
+    page_count = max(1, math.ceil(len(df) / int(page_size)))
+    with controls[1]:
+        page = st.number_input("Page", min_value=1, max_value=page_count, value=1, step=1, key=f"{key}_page")
+    start = (int(page) - 1) * int(page_size)
+    end = min(start + int(page_size), len(df))
+    st.caption(f"Showing rows {start + 1:,}-{end:,} of {len(df):,} after current filters.")
+    return df.iloc[start:end]
+
+
+def show_paginated_dataframe(
+    df: pd.DataFrame,
+    key: str,
+    default_page_size: int = 50,
+    column_config: dict | None = None,
+) -> None:
+    page_df = paginate_rows(df, key=key, default_page_size=default_page_size)
+    st.dataframe(
+        page_df,
+        hide_index=True,
+        width="stretch",
+        column_config=column_config,
+    )
+
+
 def show_ingest_controls(db_path: Path) -> str:
     with st.sidebar:
         st.caption("Real TED and Hankintailmoitus/Hilma public procurement data. Deterministic MVP, no LLM by default.")
@@ -377,24 +413,24 @@ def show_business_radar(df: pd.DataFrame) -> None:
     metric_cols[4].metric("K-Rauta Pro lane", int((working["k_business_lane"] == "K-Rauta Pro builder retail").sum()))
 
     st.subheader("Sales Action Queue")
-    queue = working.sort_values(["k_priority_score", "deadline"], ascending=[False, True]).head(25)
-    st.dataframe(
-        queue[
-            [
-                "public_data_source",
-                "k_business_lane",
-                "k_priority_band",
-                "k_priority_score",
-                "strategic_demand_signal",
-                "title",
-                "buyer",
-                "deadline",
-                "recommended_k_action",
-                "source_url",
-            ]
-        ],
-        hide_index=True,
-        width="stretch",
+    queue = working.sort_values(["k_priority_score", "deadline"], ascending=[False, True])[
+        [
+            "public_data_source",
+            "k_business_lane",
+            "k_priority_band",
+            "k_priority_score",
+            "strategic_demand_signal",
+            "title",
+            "buyer",
+            "deadline",
+            "recommended_k_action",
+            "source_url",
+        ]
+    ]
+    show_paginated_dataframe(
+        queue,
+        key="business_sales_queue",
+        default_page_size=25,
         column_config={"source_url": st.column_config.LinkColumn("Source")},
     )
 
@@ -419,9 +455,8 @@ def show_business_radar(df: pd.DataFrame) -> None:
             signals=("strategic_demand_signal", lambda values: ", ".join(sorted(set(values))[:3])),
         )
         .sort_values(["notices", "avg_priority"], ascending=False)
-        .head(30)
     )
-    st.dataframe(buyer_summary, hide_index=True, width="stretch")
+    show_paginated_dataframe(buyer_summary, key="business_buyer_summary", default_page_size=25)
 
 
 def extract_notice_value_eur(row: pd.Series) -> float | None:
@@ -570,10 +605,10 @@ def show_opportunity_map(df: pd.DataFrame, awards: pd.DataFrame) -> None:
             "award_rows",
         ]
     ].sort_values(["opportunities", "public_award_value_eur"], ascending=False)
-    st.dataframe(
+    show_paginated_dataframe(
         display,
-        hide_index=True,
-        width="stretch",
+        key="map_city_summary",
+        default_page_size=50,
         column_config={
             "avg_priority": st.column_config.NumberColumn("Avg priority", format="%.1f"),
             "opportunity_value_eur": st.column_config.NumberColumn("Active public value EUR", format="€%.0f"),
@@ -583,28 +618,27 @@ def show_opportunity_map(df: pd.DataFrame, awards: pd.DataFrame) -> None:
     )
 
     st.subheader("Highest Priority City-Mapped Opportunities")
-    st.dataframe(
-        working[
-            [
-                "public_data_source",
-                "map_city",
-                "city_evidence",
-                "country",
-                "region_city",
-                "k_business_lane",
-                "k_priority_band",
-                "k_priority_score",
-                "title",
-                "buyer",
-                "deadline",
-                "notice_value_eur",
-                "source_url",
-            ]
+    mapped_opportunities = working[
+        [
+            "public_data_source",
+            "map_city",
+            "city_evidence",
+            "country",
+            "region_city",
+            "k_business_lane",
+            "k_priority_band",
+            "k_priority_score",
+            "title",
+            "buyer",
+            "deadline",
+            "notice_value_eur",
+            "source_url",
         ]
-        .sort_values(["k_priority_score", "deadline"], ascending=[False, True])
-        .head(40),
-        hide_index=True,
-        width="stretch",
+    ].sort_values(["k_priority_score", "deadline"], ascending=[False, True])
+    show_paginated_dataframe(
+        mapped_opportunities,
+        key="map_opportunities",
+        default_page_size=50,
         column_config={
             "source_url": st.column_config.LinkColumn("Source"),
             "notice_value_eur": st.column_config.NumberColumn("Public notice value EUR", format="€%.0f"),
@@ -667,10 +701,11 @@ def show_winner_lead_radar(leads: pd.DataFrame) -> None:
         "recommended_action",
         "source_url",
     ]
-    st.dataframe(
-        working[display_cols].sort_values(["lead_score", "amount", "publication_date"], ascending=[False, False, False]).head(150),
-        hide_index=True,
-        width="stretch",
+    winner_table = working[display_cols].sort_values(["lead_score", "amount", "publication_date"], ascending=[False, False, False])
+    show_paginated_dataframe(
+        winner_table,
+        key="winner_leads",
+        default_page_size=50,
         column_config={
             "source_url": st.column_config.LinkColumn("Source"),
             "amount": st.column_config.NumberColumn("Public value", format="€%.0f"),
@@ -685,12 +720,11 @@ def show_winner_lead_radar(leads: pd.DataFrame) -> None:
             working.groupby(["winner_organisation", "k_business_lane"], as_index=False)
             .agg(lead_rows=("title", "count"), public_value_eur=("amount", "sum"), avg_score=("lead_score", "mean"), buyers=("buyer", lambda values: len(set(values))))
             .sort_values(["public_value_eur", "lead_rows", "avg_score"], ascending=False)
-            .head(40)
         )
-        st.dataframe(
+        show_paginated_dataframe(
             winners,
-            hide_index=True,
-            width="stretch",
+            key="winner_top_winners",
+            default_page_size=25,
             column_config={
                 "public_value_eur": st.column_config.NumberColumn("Public value EUR", format="€%.0f"),
                 "avg_score": st.column_config.NumberColumn("Avg score", format="%.0f"),
@@ -702,12 +736,11 @@ def show_winner_lead_radar(leads: pd.DataFrame) -> None:
             working.groupby("buyer", as_index=False)
             .agg(lead_rows=("title", "count"), public_value_eur=("amount", "sum"), winners=("winner_organisation", lambda values: len(set(values))))
             .sort_values(["public_value_eur", "lead_rows"], ascending=False)
-            .head(40)
         )
-        st.dataframe(
+        show_paginated_dataframe(
             buyers,
-            hide_index=True,
-            width="stretch",
+            key="winner_top_buyers",
+            default_page_size=25,
             column_config={"public_value_eur": st.column_config.NumberColumn("Public value EUR", format="€%.0f")},
         )
 
@@ -786,7 +819,7 @@ def show_award_intelligence(awards: pd.DataFrame) -> None:
             )
             .sort_values(["match_group", "public_value_eur", "award_rows"], ascending=[True, False, False])
         )
-        st.dataframe(supplier_summary, hide_index=True, width="stretch")
+        show_paginated_dataframe(supplier_summary, key="award_supplier_summary", default_page_size=25)
     with cols[1]:
         st.subheader("Direct Value Signal")
         value_by_group = (
@@ -797,42 +830,44 @@ def show_award_intelligence(awards: pd.DataFrame) -> None:
         st.bar_chart(value_by_group)
 
     st.subheader("K Group / Onninen Public Awards")
-    st.dataframe(
-        k_awards[
-            [
-                "publication_date",
-                "notice_number",
-                "title",
-                "buyer",
-                "matched_supplier",
-                "amount",
-                "currency",
-                "contract_end_or_expiration",
-                "source_url",
-            ]
-        ].head(50),
-        hide_index=True,
-        width="stretch",
+    k_awards_table = k_awards[
+        [
+            "publication_date",
+            "notice_number",
+            "title",
+            "buyer",
+            "matched_supplier",
+            "amount",
+            "currency",
+            "contract_end_or_expiration",
+            "source_url",
+        ]
+    ]
+    show_paginated_dataframe(
+        k_awards_table,
+        key="award_k_group",
+        default_page_size=50,
         column_config={"source_url": st.column_config.LinkColumn("Source")},
     )
 
     st.subheader("Competitor Watch")
-    st.dataframe(
-        competitor_awards[
-            [
-                "publication_date",
-                "notice_number",
-                "title",
-                "buyer",
-                "matched_supplier",
-                "amount",
-                "currency",
-                "contract_end_or_expiration",
-                "source_url",
-            ]
-        ].head(75),
-        hide_index=True,
-        width="stretch",
+    competitor_table = competitor_awards[
+        [
+            "publication_date",
+            "notice_number",
+            "title",
+            "buyer",
+            "matched_supplier",
+            "amount",
+            "currency",
+            "contract_end_or_expiration",
+            "source_url",
+        ]
+    ]
+    show_paginated_dataframe(
+        competitor_table,
+        key="award_competitors",
+        default_page_size=50,
         column_config={"source_url": st.column_config.LinkColumn("Source")},
     )
 
@@ -845,23 +880,24 @@ def show_award_intelligence(awards: pd.DataFrame) -> None:
         renewal_filter = st.selectbox("Renewal window", ["All", "0-90 days", "91-180 days", "181-365 days", "365+ days", "Past date", "No date"])
         if renewal_filter != "All":
             renewal = renewal[renewal["renewal_window"] == renewal_filter]
-        st.dataframe(
-            renewal[
-                [
-                    "renewal_window",
-                    "days_to_expiration",
-                    "contract_end_or_expiration",
-                    "title",
-                    "buyer",
-                    "matched_supplier",
-                    "match_group",
-                    "amount",
-                    "currency",
-                    "source_url",
-                ]
-            ].sort_values("contract_end_or_expiration").head(50),
-            hide_index=True,
-            width="stretch",
+        renewal_table = renewal[
+            [
+                "renewal_window",
+                "days_to_expiration",
+                "contract_end_or_expiration",
+                "title",
+                "buyer",
+                "matched_supplier",
+                "match_group",
+                "amount",
+                "currency",
+                "source_url",
+            ]
+        ].sort_values("contract_end_or_expiration")
+        show_paginated_dataframe(
+            renewal_table,
+            key="award_renewal",
+            default_page_size=50,
             column_config={"source_url": st.column_config.LinkColumn("Source")},
         )
 
@@ -936,22 +972,23 @@ def show_buyer_360(opportunities: pd.DataFrame, awards: pd.DataFrame) -> None:
             "Ranking sorts by public value first. Active tender value is included only when the notice payload has a public amount field; "
             "award value comes from public Hilma award/framework fields."
         )
-        st.dataframe(
-            ranking[
-                [
-                    "buyer",
-                    "total_public_value_eur",
-                    "public_award_value_eur",
-                    "active_public_value_eur",
-                    "active_value_rows",
-                    "active_opportunities",
-                    "act_now",
-                    "award_rows",
-                    "avg_priority",
-                ]
-            ].head(100),
-            hide_index=True,
-            width="stretch",
+        ranking_table = ranking[
+            [
+                "buyer",
+                "total_public_value_eur",
+                "public_award_value_eur",
+                "active_public_value_eur",
+                "active_value_rows",
+                "active_opportunities",
+                "act_now",
+                "award_rows",
+                "avg_priority",
+            ]
+        ]
+        show_paginated_dataframe(
+            ranking_table,
+            key="buyer_ranking",
+            default_page_size=50,
             column_config={
                 "total_public_value_eur": st.column_config.NumberColumn("Total public value EUR", format="€%.0f"),
                 "public_award_value_eur": st.column_config.NumberColumn("Award value EUR", format="€%.0f"),
@@ -986,21 +1023,22 @@ def show_buyer_360(opportunities: pd.DataFrame, awards: pd.DataFrame) -> None:
     if opps.empty:
         st.write("No active opportunities for this buyer in the selected source filter.")
     else:
-        st.dataframe(
-            opps[
-                [
-                    "public_data_source",
-                    "k_business_lane",
-                    "k_priority_band",
-                    "k_priority_score",
-                    "strategic_demand_signal",
-                    "title",
-                    "deadline",
-                    "source_url",
-                ]
-            ].sort_values(["k_priority_score", "deadline"], ascending=[False, True]),
-            hide_index=True,
-            width="stretch",
+        buyer_opps_table = opps[
+            [
+                "public_data_source",
+                "k_business_lane",
+                "k_priority_band",
+                "k_priority_score",
+                "strategic_demand_signal",
+                "title",
+                "deadline",
+                "source_url",
+            ]
+        ].sort_values(["k_priority_score", "deadline"], ascending=[False, True])
+        show_paginated_dataframe(
+            buyer_opps_table,
+            key="buyer_active_opportunities",
+            default_page_size=25,
             column_config={"source_url": st.column_config.LinkColumn("Source")},
         )
 
@@ -1008,22 +1046,23 @@ def show_buyer_360(opportunities: pd.DataFrame, awards: pd.DataFrame) -> None:
     if award_rows.empty:
         st.write("No loaded public award rows for this buyer.")
     else:
-        st.dataframe(
-            award_rows[
-                [
-                    "publication_date",
-                    "renewal_window",
-                    "title",
-                    "matched_supplier",
-                    "match_group",
-                    "amount",
-                    "currency",
-                    "contract_end_or_expiration",
-                    "source_url",
-                ]
-            ].sort_values("publication_date", ascending=False),
-            hide_index=True,
-            width="stretch",
+        buyer_awards_table = award_rows[
+            [
+                "publication_date",
+                "renewal_window",
+                "title",
+                "matched_supplier",
+                "match_group",
+                "amount",
+                "currency",
+                "contract_end_or_expiration",
+                "source_url",
+            ]
+        ].sort_values("publication_date", ascending=False)
+        show_paginated_dataframe(
+            buyer_awards_table,
+            key="buyer_award_history",
+            default_page_size=25,
             column_config={"source_url": st.column_config.LinkColumn("Source")},
         )
 
@@ -1039,7 +1078,7 @@ def show_today(df: pd.DataFrame) -> None:
     working = df.copy()
     working["best_score"] = working[["technical_trade_relevance_score", "pro_builder_relevance_score"]].max(axis=1)
     today_df = working[working["publication_date"].astype(str).str.startswith(today_iso)]
-    display_df = today_df if not today_df.empty else working.head(50)
+    display_df = today_df if not today_df.empty else working.sort_values("publication_date", ascending=False)
 
     metric_cols = st.columns(4)
     metric_cols[0].metric("Displayed notices", len(display_df))
@@ -1047,29 +1086,30 @@ def show_today(df: pd.DataFrame) -> None:
     metric_cols[2].metric("Technical avg", f"{display_df['technical_trade_relevance_score'].mean():.0f}")
     metric_cols[3].metric("Builder avg", f"{display_df['pro_builder_relevance_score'].mean():.0f}")
 
-    st.dataframe(
-        display_df[
-            [
-                "public_data_source",
-                "k_business_lane",
-                "k_priority_band",
-                "strategic_demand_signal",
-                "title",
-                "buyer",
-                "country",
-                "region_city",
-                "deadline",
-                "category",
-                "technical_trade_relevance_score",
-                "pro_builder_relevance_score",
-                "sales_territory",
-                "territory_owner",
-                "recommended_k_action",
-                "source_url",
-            ]
-        ],
-        hide_index=True,
-        width="stretch",
+    today_table = display_df[
+        [
+            "public_data_source",
+            "k_business_lane",
+            "k_priority_band",
+            "strategic_demand_signal",
+            "title",
+            "buyer",
+            "country",
+            "region_city",
+            "deadline",
+            "category",
+            "technical_trade_relevance_score",
+            "pro_builder_relevance_score",
+            "sales_territory",
+            "territory_owner",
+            "recommended_k_action",
+            "source_url",
+        ]
+    ]
+    show_paginated_dataframe(
+        today_table,
+        key="today_opportunities",
+        default_page_size=50,
         column_config={"source_url": st.column_config.LinkColumn("Source")},
     )
     if today_df.empty:
@@ -1090,7 +1130,7 @@ def show_pipeline(df: pd.DataFrame) -> None:
         .agg(notices=("title", "count"), avg_best_score=("best_score", "mean"))
         .sort_values(["avg_best_score", "notices"], ascending=False)
     )
-    st.dataframe(summary, hide_index=True, width="stretch")
+    show_paginated_dataframe(summary, key="category_pipeline", default_page_size=50)
 
     category_counts = working.groupby("category")["title"].count().sort_values(ascending=False)
     st.bar_chart(category_counts)
@@ -1236,7 +1276,7 @@ def show_export(db_path: Path, df: pd.DataFrame) -> None:
         file_name="tendersignal_opportunities.csv",
         mime="text/csv",
     )
-    st.dataframe(df[EXPORT_COLUMNS], hide_index=True, width="stretch")
+    show_paginated_dataframe(df[EXPORT_COLUMNS], key="export_preview", default_page_size=50)
 
 
 def main() -> None:
