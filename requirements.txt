@@ -1,0 +1,7 @@
+-e .
+requests>=2.32
+urllib3<2
+pandas>=2.2
+streamlit>=1.50
+pydeck>=0.9
+pytest>=8.0
