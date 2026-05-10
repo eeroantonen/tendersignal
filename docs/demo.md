@@ -72,7 +72,28 @@ Point to:
 - Hilma public award value context
 - city table under the map
 
-## 6. Award & Competitor Intelligence
+
+## 6. Winner Lead Radar
+
+Open Winner lead radar.
+
+Say:
+
+"This is the lead-generation extension I would prioritize for K Group. Public tenders show future demand, but public award notices show who actually won relevant construction and technical work. Those winners are potential indirect leads for Onninen technical supply, K-Rauta Pro materials, logistics, and account support."
+
+Point to:
+
+- search by winner, buyer, or title
+- business lane filter
+- top winners and top buyers
+- public value coverage
+- ready CRM task and source-grounded outreach note
+
+Say:
+
+"This still does not hallucinate. The action draft references only the public winner, buyer, award title, CPV/category evidence, value if returned, and source URL."
+
+## 7. Award & Competitor Intelligence
 
 Open Award & competitor intelligence.
 
@@ -87,7 +108,7 @@ Point to:
 - Competitor watch.
 - Renewal watch based on public expiration fields when available.
 
-## 7. Buyer 360
+## 8. Buyer 360
 
 Open Buyer 360.
 
@@ -103,7 +124,7 @@ Point to:
 - renewal window
 - next best actions
 
-## 8. Today's Opportunities
+## 9. Today's Opportunities
 
 Open Today's opportunities.
 
@@ -118,7 +139,7 @@ Point to:
 - Recommended sales action.
 - TED/Hankintailmoitus source link.
 
-## 9. Category Pipeline
+## 10. Category Pipeline
 
 Open Category pipeline.
 
@@ -130,7 +151,7 @@ Mention:
 
 "The model is explainable enough for a senior data analyst demo: the score is not a black box, and each opportunity includes evidence and uncertainty."
 
-## 10. Notice Detail / Sales Brief
+## 11. Notice Detail / Sales Brief
 
 Open a high-scoring notice.
 
@@ -167,7 +188,7 @@ Say:
 
 "This is the assistant pattern I would use: deterministic first, optional cheap LLM only for wording."
 
-## 11. Export
+## 12. Export
 
 Open Export and create/download CSV.
 
@@ -175,7 +196,7 @@ Say:
 
 "This makes the MVP immediately useful for sales operations: scored opportunities can be handed to account managers, imported into CRM, or reviewed in Excel."
 
-## 12. Close With Next Steps
+## 13. Close With Next Steps
 
 Implemented extension hooks:
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tendersignal.awards import normalize_award
+from tendersignal.winner_leads import normalize_winner_leads, split_winner_organisations
 
 
 def test_normalize_award_keeps_only_configured_winner_matches():
@@ -50,3 +51,31 @@ def test_normalize_award_splits_concatenated_cpv_codes():
     )
 
     assert rows[0]["cpv_codes"] == '["50700000", "50710000"]'
+
+
+
+def test_winner_leads_keep_broad_real_winners():
+    rows = normalize_winner_leads(
+        {
+            "noticeNumber": "2026-004",
+            "noticeId": 4,
+            "titleFi": "Sähköurakka kouluun",
+            "organisationNameFi": "Test buyer",
+            "datePublished": "2026-01-01T00:00:00Z",
+            "type": "29",
+            "winnerOrganisations": "Testi Sähkö Oy (1234567-8)//Rakennusliike Oy (2345678-9)",
+            "estimatedValue": 500000.0,
+            "currency": "EUR",
+            "cpvCodes": "45310000",
+            "nutsCodes": "FI1B1",
+        }
+    )
+
+    assert len(rows) == 2
+    assert {row["winner_organisation"] for row in rows} == {"Testi Sähkö Oy (1234567-8)", "Rakennusliike Oy (2345678-9)"}
+    assert all(row["lead_score"] > 50 for row in rows)
+    assert rows[0]["k_business_lane"] == "Onninen technical trade"
+
+
+def test_split_winner_organisations_dedupes():
+    assert split_winner_organisations("A Oy//B Oy//A Oy") == ["A Oy", "B Oy"]

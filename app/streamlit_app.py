@@ -11,6 +11,7 @@ import streamlit as st
 
 from tendersignal.action_pack import build_action_pack, build_ready_outputs
 from tendersignal.awards import load_awards_dataframe, run_hilma_award_ingestion
+from tendersignal.winner_leads import load_winner_leads_dataframe, run_hilma_winner_lead_ingestion
 from tendersignal.business import add_business_columns, apply_source_filter, source_filter_options
 from tendersignal.buyer_intel import (
     add_renewal_columns,
@@ -49,6 +50,7 @@ configure_streamlit_secrets()
 PAGES = [
     "K business radar",
     "Opportunity map",
+    "Winner lead radar",
     "Award & competitor intelligence",
     "Buyer 360",
     "Today's opportunities",
@@ -70,6 +72,12 @@ PAGE_GUIDANCE = {
         "who": "Regional sales leads, territory planning, category managers, and interview stakeholders who need the big picture fast.",
         "benefit": "Shows where demand is concentrated without inventing exact addresses or tender values that the source did not return.",
         "next": "Use high-count cities to focus account review, then open the underlying notices before contacting buyers.",
+    },
+    "Winner lead radar": {
+        "use": "Lead-generation page for finding contractors and suppliers that already won relevant public work.",
+        "who": "Onninen sales, K-Rauta Pro sales, business development, regional sales leads, and category managers.",
+        "benefit": "Turns past Hilma award winners into source-grounded prospect lists for indirect sales, contractor outreach, and renewal preparation.",
+        "next": "Prioritize high-score winners, verify awarded lots from the source notice, and route the account to the right K business lane.",
     },
     "Award & competitor intelligence": {
         "use": "Market-position page for public Hilma award evidence involving K Group/Onninen and selected competitors.",
@@ -135,9 +143,16 @@ def cached_awards_dataframe(db_path: str, db_version: int) -> pd.DataFrame:
     return add_award_geo_columns(load_awards_dataframe(Path(db_path)))
 
 
+@st.cache_data(ttl=60)
+def cached_winner_leads_dataframe(db_path: str, db_version: int) -> pd.DataFrame:
+    _ = db_version
+    return add_award_geo_columns(load_winner_leads_dataframe(Path(db_path)))
+
+
 def refresh_data() -> None:
     cached_dataframe.clear()
     cached_awards_dataframe.clear()
+    cached_winner_leads_dataframe.clear()
 
 
 def cached_public_data_available() -> bool:
@@ -161,6 +176,10 @@ def seed_database_from_public_cache(db_path: Path) -> list[str]:
     messages.append(f"Loaded {hilma_count} cached Hilma notices.")
     award_count = run_hilma_award_ingestion(db_path, use_cache=True)
     messages.append(f"Loaded {award_count} cached Hilma award notices.")
+    winner_cache = CACHE_DIR / "hilma_winner_leads_sample.json"
+    if winner_cache.exists():
+        lead_count = run_hilma_winner_lead_ingestion(db_path, use_cache=True)
+        messages.append(f"Loaded {lead_count} cached Hilma winner leads.")
     refresh_data()
     return messages
 
@@ -228,6 +247,7 @@ def show_ingest_controls(db_path: Path) -> str:
         use_cache = st.toggle("Use cached sample", value=not key_available)
         hilma_cache_available = (CACHE_DIR / "hilma_notices_sample.json").exists()
         award_cache_available = (CACHE_DIR / "hilma_awards_sample.json").exists()
+        winner_cache_available = (CACHE_DIR / "hilma_winner_leads_sample.json").exists()
         st.caption(
             "Hilma live API: configured"
             if key_available
@@ -263,6 +283,18 @@ def show_ingest_controls(db_path: Path) -> str:
                 st.success(f"Ingested {count} {source_text} award notices.")
             except Exception as exc:
                 st.error(f"Award ingestion failed clearly: {exc}")
+        if st.button("Ingest winner lead radar", width="stretch"):
+            try:
+                lead_use_cache = use_cache or not key_available
+                if lead_use_cache and not winner_cache_available:
+                    raise RuntimeError("No cached Hilma winner lead sample is available and the live API key is not visible to Streamlit.")
+                with st.spinner("Fetching public Hilma award winners for lead radar..."):
+                    count = run_hilma_winner_lead_ingestion(db_path, use_cache=lead_use_cache)
+                refresh_data()
+                source_text = "cached" if lead_use_cache else "live"
+                st.success(f"Ingested {count} {source_text} winner leads.")
+            except Exception as exc:
+                st.error(f"Winner lead ingestion failed clearly: {exc}")
         if st.button("Refresh 2026 YTD", width="stretch", disabled=not key_available):
             try:
                 if not key_available:
@@ -282,10 +314,12 @@ def show_ingest_controls(db_path: Path) -> str:
                         include_expired=True,
                     )
                     award_count = run_hilma_award_ingestion(db_path, days_back=1460)
+                    winner_count = run_hilma_winner_lead_ingestion(db_path, days_back=1460)
                 refresh_data()
                 st.success(
                     f"Refreshed 2026 YTD: {ted_count} TED notices, "
-                    f"{hilma_count} Hilma notices, {award_count} award rows fetched."
+                    f"{hilma_count} Hilma notices, {award_count} award rows, "
+                    f"and {winner_count} winner leads fetched."
                 )
             except Exception as exc:
                 st.error(f"2026 refresh failed clearly: {exc}")
@@ -576,6 +610,142 @@ def show_opportunity_map(df: pd.DataFrame, awards: pd.DataFrame) -> None:
             "notice_value_eur": st.column_config.NumberColumn("Public notice value EUR", format="€%.0f"),
         },
     )
+
+
+def show_winner_lead_radar(leads: pd.DataFrame) -> None:
+    st.title("Winner Lead Radar")
+    show_page_guide("Winner lead radar")
+    if leads.empty:
+        st.info("No winner leads loaded yet. Use the sidebar button to ingest public Hilma award winners.")
+        return
+
+    working = leads.copy()
+    search = st.text_input("Search winner, buyer, or award title", placeholder="e.g. sähkö, Caverion, Helsinki")
+    if search.strip():
+        pattern = search.strip().lower()
+        haystack = (
+            working["winner_organisation"].fillna("")
+            + " "
+            + working["buyer"].fillna("")
+            + " "
+            + working["title"].fillna("")
+            + " "
+            + working["category"].fillna("")
+        ).str.lower()
+        working = working[haystack.str.contains(pattern, regex=False)].copy()
+    lane_filter = st.selectbox("Lead lane", ["All"] + sorted(working["k_business_lane"].dropna().unique().tolist()))
+    if lane_filter != "All":
+        working = working[working["k_business_lane"] == lane_filter].copy()
+    min_score = st.slider("Minimum lead score", min_value=0, max_value=100, value=50, step=5)
+    working = working[working["lead_score"].fillna(0).ge(min_score)].copy()
+
+    amount_df = working[working["amount"].notna()]
+    metric_cols = st.columns(5)
+    metric_cols[0].metric("Winner leads", len(working))
+    metric_cols[1].metric("Unique winners", working["winner_organisation"].nunique())
+    metric_cols[2].metric("Unique buyers", working["buyer"].nunique())
+    metric_cols[3].metric("Public value", f"€{working['amount'].sum(skipna=True)/1_000_000:.1f}m")
+    metric_cols[4].metric("Value coverage", f"{(len(amount_df) / len(working) * 100 if len(working) else 0):.0f}%")
+
+    st.caption(
+        "This page uses public Hilma award notices to identify organisations that won relevant work. "
+        "A winner is a sales lead only when source fields support the category and lane; values are public notice/framework values, not expected K Group revenue."
+    )
+
+    st.subheader("Highest Priority Winner Leads")
+    display_cols = [
+        "lead_score",
+        "k_business_lane",
+        "category",
+        "winner_organisation",
+        "buyer",
+        "title",
+        "publication_date",
+        "amount",
+        "currency",
+        "contract_end_or_expiration",
+        "recommended_action",
+        "source_url",
+    ]
+    st.dataframe(
+        working[display_cols].sort_values(["lead_score", "amount", "publication_date"], ascending=[False, False, False]).head(150),
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "source_url": st.column_config.LinkColumn("Source"),
+            "amount": st.column_config.NumberColumn("Public value", format="€%.0f"),
+            "lead_score": st.column_config.NumberColumn("Score", format="%.0f"),
+        },
+    )
+
+    cols = st.columns(2)
+    with cols[0]:
+        st.subheader("Top Winners")
+        winners = (
+            working.groupby(["winner_organisation", "k_business_lane"], as_index=False)
+            .agg(lead_rows=("title", "count"), public_value_eur=("amount", "sum"), avg_score=("lead_score", "mean"), buyers=("buyer", lambda values: len(set(values))))
+            .sort_values(["public_value_eur", "lead_rows", "avg_score"], ascending=False)
+            .head(40)
+        )
+        st.dataframe(
+            winners,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "public_value_eur": st.column_config.NumberColumn("Public value EUR", format="€%.0f"),
+                "avg_score": st.column_config.NumberColumn("Avg score", format="%.0f"),
+            },
+        )
+    with cols[1]:
+        st.subheader("Top Buyers Creating Winner Leads")
+        buyers = (
+            working.groupby("buyer", as_index=False)
+            .agg(lead_rows=("title", "count"), public_value_eur=("amount", "sum"), winners=("winner_organisation", lambda values: len(set(values))))
+            .sort_values(["public_value_eur", "lead_rows"], ascending=False)
+            .head(40)
+        )
+        st.dataframe(
+            buyers,
+            hide_index=True,
+            width="stretch",
+            column_config={"public_value_eur": st.column_config.NumberColumn("Public value EUR", format="€%.0f")},
+        )
+
+    with st.expander("Evidence, uncertainties and ready action for selected top lead"):
+        if working.empty:
+            st.write("No lead selected.")
+        else:
+            row = working.sort_values(["lead_score", "amount"], ascending=[False, False]).iloc[0]
+            value_text = "No public value returned"
+            if pd.notna(row.get("amount")):
+                value_text = f"Public award/framework value {row['amount']:,.0f} {row.get('currency') or 'EUR'}"
+            st.write(f"**Winner:** {row['winner_organisation']}")
+            st.write(f"**Buyer:** {row['buyer']}")
+            st.write(f"**Recommended action:** {row['recommended_action']}")
+            st.write("**Ready CRM task**")
+            st.code(
+                f"Review Hilma award winner {row['winner_organisation']} for {row['k_business_lane']}. "
+                f"Award: {row['title']} / buyer {row['buyer']}. {value_text}. "
+                f"Validate lots and scope from source before outreach: {row['source_url']}",
+                language="text",
+            )
+            st.write("**Source-grounded outreach note**")
+            st.code(
+                f"We noticed from the public Hilma award notice that {row['winner_organisation']} appears as a winner for '{row['title']}' by {row['buyer']}. "
+                f"Based on the public title/CPV evidence, this looks like {row['category']} and may fit {row['k_business_lane']}. "
+                "Could we help validate material, logistics, or technical supply needs for the awarded work?",
+                language="text",
+            )
+            st.write("**Evidence**")
+            for item in parse_list(row.get("evidence", "[]")):
+                st.write(f"- {item}")
+            st.write("**Uncertainties**")
+            uncertainties = parse_list(row.get("uncertainties", "[]"))
+            if uncertainties:
+                for item in uncertainties:
+                    st.write(f"- {item}")
+            else:
+                st.write("No major source-field uncertainties detected.")
 
 
 def show_award_intelligence(awards: pd.DataFrame) -> None:
@@ -1083,6 +1253,7 @@ def main() -> None:
     df = apply_source_filter(df, source_filter)
     df = apply_publication_date_filter(df)
     awards = cached_awards_dataframe(str(db_path), db_version)
+    winner_leads = cached_winner_leads_dataframe(str(db_path), db_version)
     if seed_messages:
         with st.sidebar.expander("Startup data load", expanded=False):
             for message in seed_messages:
@@ -1092,6 +1263,8 @@ def main() -> None:
         show_business_radar(df)
     elif page == "Opportunity map":
         show_opportunity_map(df, awards)
+    elif page == "Winner lead radar":
+        show_winner_lead_radar(winner_leads)
     elif page == "Award & competitor intelligence":
         show_award_intelligence(awards)
     elif page == "Buyer 360":

@@ -29,6 +29,7 @@ Do not commit a real key to GitHub.
 - Real cached TED notices from successful API ingestion.
 - Real cached Hilma notices from successful API ingestion.
 - Real cached Hilma award-search payloads.
+- Real cached Hilma winner-lead award payloads.
 - Deterministic scoring and sales briefings.
 - No LLM calls by default.
 - No invented tenders, customers, values, or cities.
@@ -40,12 +41,12 @@ Run locally before pushing:
 ```bash
 python -m pytest -q
 PYTHONPYCACHEPREFIX=/tmp/tendersignal_pycache python -m compileall -q app src scripts
-streamlit run app/streamlit_app.py
+python -m streamlit run app/streamlit_app.py
 ```
 
 ## Known Hosted Limitations
 
 - Live Hilma refresh is disabled unless a Hilma AVP key is configured in deployment secrets.
-- The bundled cache is a point-in-time public-data snapshot. Use live refresh for current operations.
+- The bundled cache is a point-in-time public-data snapshot, including winner leads from real Hilma award notices. Use live refresh for current operations.
 - The city map only plots cities matched from public source fields and a static Nordic city list.
 - Map dots are fixed-size markers; opportunity counts and values are shown in tooltips and tables.

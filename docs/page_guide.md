@@ -14,6 +14,14 @@
 - Benefit: shows where active opportunities cluster and where public Hilma award/framework value exists without inventing exact project addresses or tender values.
 - Next steps: use high-count cities to focus account review, then open the underlying notices before contacting buyers.
 
+
+## Winner Lead Radar
+
+- Used for: converting public Hilma award winners into indirect sales leads.
+- Used by: Onninen sales, K-Rauta Pro sales, business development, regional sales leads, and category managers.
+- Benefit: identifies contractors and suppliers that already won relevant work, then gives a source-grounded action draft without inventing private customer facts.
+- Next steps: search the winner or buyer, verify the awarded scope from the source notice, and route the account to the right K business lane.
+
 ## Award & Competitor Intelligence
 
 - Used for: public market-position review.

@@ -6,6 +6,7 @@ from datetime import date
 from tendersignal.awards import run_hilma_award_ingestion
 from tendersignal.config import DEFAULT_DB_PATH
 from tendersignal.pipeline import run_hilma_ingestion_for_period, run_ted_ingestion_for_period
+from tendersignal.winner_leads import run_hilma_winner_lead_ingestion
 
 
 def main() -> None:
@@ -20,6 +21,9 @@ def main() -> None:
     print("Refreshing Hilma award intelligence...")
     award_count = run_hilma_award_ingestion(DEFAULT_DB_PATH, days_back=1460)
     print(f"Award notices: {award_count}")
+    print("Refreshing Hilma winner lead radar...")
+    winner_count = run_hilma_winner_lead_ingestion(DEFAULT_DB_PATH, days_back=1460)
+    print(f"Winner leads: {winner_count}")
 
 
 if __name__ == "__main__":

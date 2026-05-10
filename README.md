@@ -11,6 +11,7 @@ The app fetches real public procurement notices from TED, filters construction a
 - Classifies notices with CPV and keyword rules.
 - Scores technical trade and pro builder relevance transparently.
 - Generates sales briefings using only source fields and deterministic evidence.
+- Converts real public Hilma award winners into prospect lists for Onninen/K-Rauta Pro outreach.
 - Exports scored opportunities to CSV.
 - Provides data reliability visibility, including failed ingestion runs.
 
@@ -60,6 +61,7 @@ For production-style 2026 coverage:
 python scripts/ingest_ted.py --year 2026 --limit 10000
 HILMA_AVP_SUBSCRIPTION_KEY="..." python scripts/ingest_hilma.py --year 2026 --include-expired --limit 10000
 HILMA_AVP_SUBSCRIPTION_KEY="..." python scripts/ingest_hilma_awards.py --days-back 1460
+HILMA_AVP_SUBSCRIPTION_KEY="..." python scripts/ingest_winner_leads.py --days-back 1460
 ```
 
 Or run the combined refresh:
@@ -68,12 +70,12 @@ Or run the combined refresh:
 HILMA_AVP_SUBSCRIPTION_KEY="..." python scripts/refresh_2026.py
 ```
 
-The Streamlit sidebar also includes a `Refresh 2026 YTD` button. It refreshes TED, Hilma, and Hilma award intelligence together when `HILMA_AVP_SUBSCRIPTION_KEY` is visible to the Streamlit server process. The publication-date filter lets users analyze all loaded 2026 data or narrow to a current operating window.
+The Streamlit sidebar also includes a `Refresh 2026 YTD` button. It refreshes TED, Hilma, Hilma award intelligence, and the Hilma winner-lead radar together when `HILMA_AVP_SUBSCRIPTION_KEY` is visible to the Streamlit server process. The publication-date filter lets users analyze all loaded 2026 data or narrow to a current operating window.
 
 ## Run The App
 
 ```bash
-HILMA_AVP_SUBSCRIPTION_KEY="..." streamlit run app/streamlit_app.py --server.port 8502
+HILMA_AVP_SUBSCRIPTION_KEY="..." python -m streamlit run app/streamlit_app.py --server.port 8502
 ```
 
 For hosted recruiter demo mode, the key is optional. If `data/tendersignal.sqlite` is missing, the app seeds it on first start from the bundled real public cache in `data/cache/`.
@@ -82,6 +84,7 @@ Pages:
 
 - K business radar
 - Opportunity map
+- Winner lead radar
 - Award & competitor intelligence
 - Buyer 360
 - Today's opportunities
@@ -140,9 +143,20 @@ Hilma award notices can be ingested into a separate `award_notices` table:
 
 ```bash
 HILMA_AVP_SUBSCRIPTION_KEY="..." python scripts/ingest_hilma_awards.py --days-back 1460
+HILMA_AVP_SUBSCRIPTION_KEY="..." python scripts/ingest_winner_leads.py --days-back 1460
 ```
 
 The award view shows public evidence for named winners such as Onninen and selected competitors. Amounts are public notice/framework values where available, not realized sales. Search noise is filtered out unless the configured supplier name appears in the public `winnerOrganisations` field.
+
+## Winner Lead Radar
+
+Hilma award winners can also be turned into indirect B2B lead signals:
+
+```bash
+HILMA_AVP_SUBSCRIPTION_KEY="..." python scripts/ingest_winner_leads.py --days-back 1460
+```
+
+This page answers a different commercial question than open tenders: who already won public construction or technical-trade work and may now need materials, logistics, technical supply, or account support. It uses only public `winnerOrganisations`, title, CPV, buyer, date, value, and source URL fields. The ready CRM task and outreach note are deterministic drafts that explicitly ask the user to validate scope from the source notice before contacting anyone.
 
 ## Opportunity Map
 
