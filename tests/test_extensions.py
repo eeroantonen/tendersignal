@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from tendersignal.sources.hilma import HilmaApiConfigurationError, HilmaClient, build_hilma_notice_url
+from tendersignal.hilma_urls import build_hilma_notice_url
+from tendersignal.sources.hilma import HilmaApiConfigurationError, HilmaClient
 from tendersignal.sources.ted import normalize_publication_date
 from tendersignal.geo import city_from_address, extract_city_from_notice_row
 

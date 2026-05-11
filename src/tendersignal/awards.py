@@ -10,7 +10,8 @@ import pandas as pd
 
 from tendersignal.config import CACHE_DIR, DEFAULT_DB_PATH
 from tendersignal.database import connect, init_db, record_ingestion_run
-from tendersignal.sources.hilma import HilmaClient, build_hilma_notice_url, extract_search_results
+from tendersignal.hilma_urls import build_hilma_notice_url
+from tendersignal.sources.hilma import HilmaClient, extract_search_results
 from tendersignal.text import first_text, unique_strings
 
 K_GROUP_TERMS = ("Onninen Oy", "Onninen", "Kesko Oyj", "K-Rauta", "K Rauta")

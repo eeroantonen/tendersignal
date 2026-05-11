@@ -5,7 +5,7 @@ from pathlib import Path
 
 from tendersignal.config import DEFAULT_DB_PATH
 from tendersignal.database import connect, init_db
-from tendersignal.sources.hilma import build_hilma_notice_url
+from tendersignal.hilma_urls import build_hilma_notice_url
 
 
 def repair_hilma_source_urls(db_path: Path = DEFAULT_DB_PATH) -> dict[str, int]:
