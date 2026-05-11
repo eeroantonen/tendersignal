@@ -24,6 +24,7 @@ from tendersignal.config import CACHE_DIR, DEFAULT_DB_PATH
 from tendersignal.database import init_db, load_ingestion_runs, load_opportunities
 from tendersignal.export import EXPORT_COLUMNS, export_csv, opportunities_dataframe
 from tendersignal.geo import CITY_CENTROIDS, extract_city_from_award_row, extract_city_from_notice_row
+from tendersignal.hilma_links import repair_hilma_source_urls
 from tendersignal.llm.action_drafter import maybe_polish_action_outputs
 from tendersignal.pipeline import (
     run_hilma_ingestion,
@@ -1282,6 +1283,7 @@ def show_export(db_path: Path, df: pd.DataFrame) -> None:
 def main() -> None:
     db_path = DEFAULT_DB_PATH
     init_db(db_path)
+    repair_hilma_source_urls(db_path)
     seed_messages: list[str] = []
     if not load_opportunities(db_path):
         with st.spinner("Loading bundled real public procurement data..."):

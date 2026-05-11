@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tendersignal.sources.hilma import HilmaApiConfigurationError, HilmaClient
+from tendersignal.sources.hilma import HilmaApiConfigurationError, HilmaClient, build_hilma_notice_url
 from tendersignal.sources.ted import normalize_publication_date
 from tendersignal.geo import city_from_address, extract_city_from_notice_row
 
@@ -48,3 +48,29 @@ def test_city_from_ted_title_is_source_grounded():
 
     assert city == "Rovaniemi"
     assert "source text city" in evidence
+
+
+def test_hilma_eforms_notice_url_uses_public_procedure_route():
+    url = build_hilma_notice_url(
+        {
+            "id": "EF-48640",
+            "isEForms": True,
+            "noticeId": 48640,
+            "procedureId": 32400,
+            "noticeNumber": "2026-048640",
+        }
+    )
+
+    assert url == "https://www.hankintailmoitukset.fi/fi/public/procedure/32400/enotice/48640"
+
+
+def test_hilma_old_notice_url_uses_project_and_notice_route():
+    url = build_hilma_notice_url(
+        {
+            "isEForms": False,
+            "noticeId": 123,
+            "oldProcurementProjectId": 456,
+        }
+    )
+
+    assert url == "https://www.hankintailmoitukset.fi/fi/public/procurement/456/notice/123"

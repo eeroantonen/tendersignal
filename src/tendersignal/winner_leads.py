@@ -11,7 +11,7 @@ import pandas as pd
 from tendersignal.awards import AWARD_NOTICE_TYPES, collect_award_cpv, slug
 from tendersignal.config import CACHE_DIR, DEFAULT_DB_PATH
 from tendersignal.database import connect, init_db, record_ingestion_run
-from tendersignal.sources.hilma import HilmaClient, extract_search_results
+from tendersignal.sources.hilma import HilmaClient, build_hilma_notice_url, extract_search_results
 from tendersignal.text import first_text
 
 WINNER_LEAD_SEARCH_TERMS = (
@@ -143,7 +143,7 @@ def normalize_winner_leads(raw: dict[str, Any]) -> list[dict[str, Any]]:
                 "recommended_action": recommended_winner_action(lane, winner, category),
                 "evidence": json.dumps(evidence, ensure_ascii=False),
                 "uncertainties": json.dumps(uncertainties, ensure_ascii=False),
-                "source_url": f"https://www.hankintailmoitukset.fi/fi/public/procurement/{first_text(raw.get('noticeId'))}",
+                "source_url": build_hilma_notice_url(raw),
                 "raw_award": json.dumps(raw, ensure_ascii=False),
             }
         )

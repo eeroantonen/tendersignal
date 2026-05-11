@@ -10,7 +10,7 @@ import pandas as pd
 
 from tendersignal.config import CACHE_DIR, DEFAULT_DB_PATH
 from tendersignal.database import connect, init_db, record_ingestion_run
-from tendersignal.sources.hilma import HilmaClient, extract_search_results
+from tendersignal.sources.hilma import HilmaClient, build_hilma_notice_url, extract_search_results
 from tendersignal.text import first_text, unique_strings
 
 K_GROUP_TERMS = ("Onninen Oy", "Onninen", "Kesko Oyj", "K-Rauta", "K Rauta")
@@ -100,7 +100,7 @@ def normalize_award(raw: dict[str, Any]) -> list[dict[str, Any]]:
                 "amount": raw.get("noticeResultTotalAmount"),
                 "currency": first_text(raw.get("noticeResultTotalAmountCurrency")),
                 "contract_end_or_expiration": first_text(raw.get("expirationDate")),
-                "source_url": f"https://www.hankintailmoitukset.fi/fi/public/procurement/{first_text(raw.get('noticeId'))}",
+                "source_url": build_hilma_notice_url(raw),
                 "raw_award": json.dumps(raw, ensure_ascii=False),
             }
         )
